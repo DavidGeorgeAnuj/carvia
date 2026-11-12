@@ -9,7 +9,6 @@ import {
   TextInput,
   StyleSheet,
   Animated,
-  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +20,7 @@ import {
   AmenityTag,
   EmptyState,
 } from '../components/UIComponents';
+import { useTabBarInset } from '../hooks/useTabBarInset';
 import { mockEVStations } from '../data/mockData';
 
 const EV_FILTERS = ['All', 'Fast Charge (DC)', 'Slow Charge (AC)', '24/7 Open', 'Available Now'];
@@ -124,6 +124,7 @@ export default function EVScreen({ navigation }) {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const tabBarInset = useTabBarInset();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -191,7 +192,12 @@ export default function EVScreen({ navigation }) {
       </View>
 
       {/* Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={evListStyles.filterRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        contentContainerStyle={evListStyles.filterRow}
+      >
         {EV_FILTERS.map((f) => (
           <Chip key={f} label={f} active={activeFilter === f} onPress={() => setActiveFilter(f)} />
         ))}
@@ -202,7 +208,7 @@ export default function EVScreen({ navigation }) {
         data={filteredStations}
         keyExtractor={(item) => item.id}
         style={{ opacity: fadeAnim }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: tabBarInset + 16 }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState icon="⚡" title="No stations found" subtitle="Try adjusting your filters." />

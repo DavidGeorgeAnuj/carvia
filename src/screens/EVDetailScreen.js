@@ -4,14 +4,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Animated,
   Modal,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import {
@@ -20,9 +19,8 @@ import {
   SecondaryButton,
   StatusBadge,
   StarRating,
-  AmenityTag,
-  Divider,
 } from '../components/UIComponents';
+import { useTabBarInset } from '../hooks/useTabBarInset';
 
 const CONNECTOR_COLORS = {
   'CCS2': '#3B9EFF',
@@ -32,20 +30,29 @@ const CONNECTOR_COLORS = {
 };
 
 function ChargingSessionModal({ visible, station, connector, onClose }) {
+  const insets = useSafeAreaInsets();
   const [elapsed, setElapsed] = useState(0);
   const [energy, setEnergy] = useState(0);
-  const [charging, setCharging] = useState(true);
+  // `active` represents the charging session itself, not the modal visibility.
+  // That way minimizing the sheet keeps the timer and energy counting.
+  const [active, setActive] = useState(false);
   const intervalRef = useRef(null);
 
   useEffect(() => {
-    if (visible && charging) {
-      intervalRef.current = setInterval(() => {
-        setElapsed((e) => e + 1);
-        setEnergy((en) => +(en + (connector?.power || 7.2) / 3600).toFixed(4));
-      }, 1000);
+    if (visible) setActive(true);
+  }, [visible]);
+
+  useEffect(() => {
+    if (!active) {
+      clearInterval(intervalRef.current);
+      return undefined;
     }
+    intervalRef.current = setInterval(() => {
+      setElapsed((e) => e + 1);
+      setEnergy((en) => +(en + (connector?.power || 7.2) / 3600).toFixed(4));
+    }, 1000);
     return () => clearInterval(intervalRef.current);
-  }, [visible, charging]);
+  }, [active, connector]);
 
   const formatTime = (secs) => {
     const h = Math.floor(secs / 3600);
@@ -58,31 +65,39 @@ function ChargingSessionModal({ visible, station, connector, onClose }) {
   const pct = Math.min(100, Math.round((energy / 60) * 100));
 
   const handleStop = () => {
-    setCharging(false);
+    setActive(false);
     clearInterval(intervalRef.current);
     Alert.alert(
       'Session Complete',
       `Total: ${energy.toFixed(2)} kWh · ₹${cost}`,
-      [{ text: 'Done', onPress: () => { setElapsed(0); setEnergy(0); setCharging(true); onClose(); } }]
+      [{
+        text: 'Done',
+        onPress: () => {
+          setElapsed(0);
+          setEnergy(0);
+          onClose();
+        },
+      }],
+      { cancelable: false }
     );
   };
 
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={sessStyles.overlay} activeOpacity={1} onPress={() => {}} />
-      <View style={sessStyles.sheet}>
+      <View style={[sessStyles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 24 }]}>
         <View style={sessStyles.handle} />
 
         <View style={{ alignItems: 'center', marginBottom: 24 }}>
           <LinearGradient
-            colors={charging ? ['#071A14', '#0F3024'] : ['#1A1A1A', '#0D0D0D']}
+            colors={active ? ['#071A14', '#0F3024'] : ['#1A1A1A', '#0D0D0D']}
             style={sessStyles.iconRing}
           >
             <Text style={{ fontSize: 32 }}>⚡</Text>
           </LinearGradient>
-          <Text style={sessStyles.sessionTitle}>{charging ? 'Charging in Progress' : 'Paused'}</Text>
+          <Text style={sessStyles.sessionTitle}>{active ? 'Charging in Progress' : 'Paused'}</Text>
           <Text style={sessStyles.connectorLabel}>{connector?.type} · {connector?.power} kW</Text>
         </View>
 
@@ -123,7 +138,7 @@ function ChargingSessionModal({ visible, station, connector, onClose }) {
         <TouchableOpacity onPress={handleStop} style={sessStyles.stopBtn}>
           <Text style={sessStyles.stopBtnText}>Stop Charging</Text>
         </TouchableOpacity>
-        <SecondaryButton title="Minimize" onPress={onClose} style={{ marginTop: 10 }} />
+        <SecondaryButton title="Minimize (keeps charging)" onPress={onClose} style={{ marginTop: 10 }} />
       </View>
     </Modal>
   );
@@ -134,6 +149,7 @@ export default function EVDetailScreen({ route, navigation }) {
   const [selectedConnector, setSelectedConnector] = useState(null);
   const [sessionModal, setSessionModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const tabBarInset = useTabBarInset();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -153,11 +169,11 @@ export default function EVDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={detStyles.backBtn}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={detStyles.backBtn} accessibilityLabel="Go back">
         <Text style={detStyles.backIcon}>←</Text>
       </TouchableOpacity>
 
-      <Animated.ScrollView style={{ opacity: fadeAnim }} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView style={{ opacity: fadeAnim }} contentContainerStyle={{ paddingBottom: tabBarInset + 16 }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <LinearGradient colors={['#071A14', '#0D1110']} style={detStyles.hero}>
           <View style={detStyles.heroBadge}>
@@ -170,7 +186,7 @@ export default function EVDetailScreen({ route, navigation }) {
             <StarRating rating={station.rating} reviews={station.totalReviews} size={13} />
             <StatusBadge status={station.status} />
           </View>
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 16 }}>
             <View style={detStyles.heroPill}>
               <Text style={detStyles.heroPillVal}>₹{station.pricePerUnit}/kWh</Text>
             </View>
@@ -264,9 +280,8 @@ export default function EVDetailScreen({ route, navigation }) {
 
           {/* Start charging */}
           <PrimaryButton
-            title={selectedConnector ? `⚡ Start Charging — ${selectedConnector.type}` : 'Select a Connector First'}
+            title={selectedConnector ? `⚡ Start Charging — ${selectedConnector.type}` : '⚡ Start Charging'}
             onPress={startCharging}
-            disabled={!selectedConnector}
           />
         </View>
       </Animated.ScrollView>
@@ -303,7 +318,7 @@ const detStyles = StyleSheet.create({
 
 const sessStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36, borderWidth: 1, borderColor: colors.border },
+  sheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderColor: colors.border },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20 },
   iconRing: { width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.primary, marginBottom: 12 },
   sessionTitle: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 20, color: colors.primary },

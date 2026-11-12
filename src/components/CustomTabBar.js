@@ -1,20 +1,20 @@
 // CARVIA — Custom Tab Bar
 
 import React, { useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
-const { width } = Dimensions.get('window');
-
 const TABS = [
-  { key: 'Home', label: 'Home', icon: '🏠', activeIcon: '🏠' },
-  { key: 'Parking', label: 'Parking', icon: '🅿️', activeIcon: '🅿️' },
-  { key: 'EV', label: 'Charging', icon: '⚡', activeIcon: '⚡' },
-  { key: 'Profile', label: 'Profile', icon: '👤', activeIcon: '👤' },
+  { key: 'Home', label: 'Home', icon: '🏠', activeIcon: '🏠', root: 'HomeMain' },
+  { key: 'Parking', label: 'Parking', icon: '🅿️', activeIcon: '🅿️', root: 'ParkingMain' },
+  { key: 'EV', label: 'Charging', icon: '⚡', activeIcon: '⚡', root: 'EVMain' },
+  { key: 'Profile', label: 'Profile', icon: '👤', activeIcon: '👤', root: 'ProfileMain' },
 ];
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
+  const insets = useSafeAreaInsets();
   const animations = useRef(TABS.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
@@ -27,8 +27,14 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
     });
   }, [state.index]);
 
+  // Always jump back to the first screen of a tab's stack so pressing a tab
+  // never leaves the user stuck on a stale detail screen.
+  const handlePress = (tab) => {
+    navigation.navigate(tab.key, { screen: tab.root });
+  };
+
   return (
-    <View style={tabStyles.container}>
+    <View style={[tabStyles.container, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
       <LinearGradient
         colors={['rgba(13,17,16,0)', 'rgba(13,17,16,0.98)', '#0D1110']}
         style={tabStyles.gradient}
@@ -37,7 +43,6 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       <View style={tabStyles.bar}>
         {TABS.map((tab, index) => {
           const isFocused = state.index === index;
-          const route = state.routes[index];
 
           const scale = animations[index].interpolate({
             inputRange: [0, 1],
@@ -52,9 +57,12 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
           return (
             <TouchableOpacity
               key={tab.key}
-              onPress={() => navigation.navigate(tab.key)}
+              onPress={() => handlePress(tab)}
               activeOpacity={0.8}
               style={tabStyles.tab}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={tab.label}
             >
               <Animated.View style={[tabStyles.tabInner, { transform: [{ scale }, { translateY }] }]}>
                 {isFocused && (
@@ -75,16 +83,13 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 
 const tabStyles = StyleSheet.create({
   container: { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 100 },
+  gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 120 },
   bar: {
     flexDirection: 'row',
     backgroundColor: colors.bgElevated,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingBottom: 20,
+    paddingBottom: 12,
     paddingTop: 10,
     marginHorizontal: 16,
-    marginBottom: 10,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: colors.border,

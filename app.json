@@ -2,14 +2,11 @@
   "expo": {
     "name": "CARVIA",
     "slug": "carvia-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0D1110",
-    "splash": {
-      "backgroundColor": "#0D1110"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.carvia.app"
@@ -21,14 +18,22 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.carvia.app",
-      "statusBarColor": "#0D1110",
-      "statusBarStyle": "light",
-      "jsEngine": "jsc"
+      "package": "com.carvia.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": []
+    "plugins": [
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0D1110",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ]
+    ]
   }
 }

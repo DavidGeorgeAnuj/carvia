@@ -1,14 +1,13 @@
 // CARVIA — Home Screen
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,9 +18,18 @@ import {
   StatusBadge,
   StarRating,
 } from '../components/UIComponents';
+import { useTabBarInset } from '../hooks/useTabBarInset';
 import { mockUser, mockParkingSpots, mockEVStations, mockRecentActivity, mockStats } from '../data/mockData';
 
-const { width } = Dimensions.get('window');
+const LOCATIONS = ['Koramangala, Bengaluru', 'Indiranagar, Bengaluru', 'Whitefield, Bengaluru', 'HSR Layout, Bengaluru'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
 
 function QuickActionCard({ icon, title, subtitle, gradientColors, onPress }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -68,7 +76,7 @@ function ActivityItem({ item }) {
       <View style={{ flex: 1 }}>
         <Text style={styles.activityTitle}>{item.location}</Text>
         <Text style={styles.activityMeta}>
-          {item.date} · {item.duration}
+          {formatDate(item.date)} · {item.duration}
           {item.energyAdded ? ` · ${item.energyAdded}` : ''}
         </Text>
       </View>
@@ -98,9 +106,44 @@ function NearbyCard({ item, onPress, type }) {
   );
 }
 
+function LocationModal({ visible, current, onClose, onSelect }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={styles.modalSheet} onPress={() => {}}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Choose Location</Text>
+          <Text style={styles.modalSubtitle}>We'll show parking and charging nearby.</Text>
+          {LOCATIONS.map((loc) => {
+            const selected = current === loc;
+            return (
+              <TouchableOpacity
+                key={loc}
+                onPress={() => onSelect(loc)}
+                activeOpacity={0.8}
+                style={[styles.locationOption, selected && styles.locationOptionActive]}
+              >
+                <Text style={{ fontSize: 16 }}>📍</Text>
+                <Text style={[styles.locationOptionText, selected && { color: colors.primary }]}>{loc}</Text>
+                {selected && <Text style={{ color: colors.primary, fontSize: 15 }}>✓</Text>}
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} activeOpacity={0.8}>
+            <Text style={styles.modalCloseText}>Cancel</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
 export default function HomeScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const tabBarInset = useTabBarInset();
+  const [location, setLocation] = useState(LOCATIONS[0]);
+  const [locationModal, setLocationModal] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -116,7 +159,7 @@ export default function HomeScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Animated.ScrollView
         style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarInset + 16 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -125,7 +168,12 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.greeting}>{greeting},</Text>
             <Text style={styles.name}>{mockUser.name.split(' ')[0]} 👋</Text>
           </View>
-          <TouchableOpacity style={styles.avatar}>
+          <TouchableOpacity
+            style={styles.avatar}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Profile', { screen: 'ProfileMain' })}
+            accessibilityLabel="Open profile"
+          >
             <Text style={{ fontSize: 20, color: colors.textPrimary, fontFamily: 'SpaceGrotesk_700Bold' }}>
               {mockUser.name.charAt(0)}
             </Text>
@@ -135,8 +183,8 @@ export default function HomeScreen({ navigation }) {
         {/* Location banner */}
         <View style={styles.locationBanner}>
           <Text style={{ fontSize: 14 }}>📍</Text>
-          <Text style={styles.locationText}>Koramangala, Bengaluru</Text>
-          <TouchableOpacity>
+          <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
+          <TouchableOpacity onPress={() => setLocationModal(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.changeText}>Change</Text>
           </TouchableOpacity>
         </View>
@@ -148,7 +196,7 @@ export default function HomeScreen({ navigation }) {
             title="Smart Parking"
             subtitle="Find & book spots"
             gradientColors={['#1A3A5E', '#0F2240']}
-            onPress={() => navigation.navigate('Parking')}
+            onPress={() => navigation.navigate('Parking', { screen: 'ParkingMain' })}
           />
           <View style={{ width: 12 }} />
           <QuickActionCard
@@ -156,7 +204,7 @@ export default function HomeScreen({ navigation }) {
             title="EV Charging"
             subtitle="Charge your vehicle"
             gradientColors={['#0F3024', '#071A14']}
-            onPress={() => navigation.navigate('EV')}
+            onPress={() => navigation.navigate('EV', { screen: 'EVMain' })}
           />
         </View>
 
@@ -176,7 +224,7 @@ export default function HomeScreen({ navigation }) {
         <SectionHeader
           title="Nearby Parking"
           action="See all"
-          onAction={() => navigation.navigate('Parking')}
+          onAction={() => navigation.navigate('Parking', { screen: 'ParkingMain' })}
         />
         {mockParkingSpots.slice(0, 3).map((spot) => (
           <NearbyCard
@@ -192,7 +240,7 @@ export default function HomeScreen({ navigation }) {
           <SectionHeader
             title="EV Charging Nearby"
             action="See all"
-            onAction={() => navigation.navigate('EV')}
+            onAction={() => navigation.navigate('EV', { screen: 'EVMain' })}
           />
           {mockEVStations.slice(0, 2).map((station) => (
             <NearbyCard
@@ -225,6 +273,13 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.footerTagline}>One platform. Every journey.</Text>
         </View>
       </Animated.ScrollView>
+
+      <LocationModal
+        visible={locationModal}
+        current={location}
+        onClose={() => setLocationModal(false)}
+        onSelect={(loc) => { setLocation(loc); setLocationModal(false); }}
+      />
     </SafeAreaView>
   );
 }
@@ -268,4 +323,14 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', paddingTop: 32, paddingBottom: 8, gap: 4 },
   footerLogo: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16, color: colors.primary, letterSpacing: 2 },
   footerTagline: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32, borderWidth: 1, borderColor: colors.border },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 18 },
+  modalTitle: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 20, color: colors.textPrimary },
+  modalSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 16 },
+  locationOption: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard, marginBottom: 10 },
+  locationOptionActive: { borderColor: colors.primary, backgroundColor: colors.primaryGlow },
+  locationOptionText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.textPrimary },
+  modalCloseBtn: { alignItems: 'center', paddingVertical: 12, marginTop: 4 },
+  modalCloseText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.textSecondary },
 });

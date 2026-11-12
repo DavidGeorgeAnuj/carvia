@@ -9,21 +9,22 @@ import {
   TextInput,
   StyleSheet,
   Animated,
-  FlatList,
+  Modal,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import {
-  Card,
   Chip,
   StatusBadge,
   StarRating,
   AmenityTag,
-  SectionHeader,
   EmptyState,
+  PrimaryButton,
+  SecondaryButton,
 } from '../components/UIComponents';
+import { useTabBarInset } from '../hooks/useTabBarInset';
 import { mockParkingSpots } from '../data/mockData';
 
 const { width } = Dimensions.get('window');
@@ -31,7 +32,29 @@ const { width } = Dimensions.get('window');
 const FILTERS = ['All', 'Open Now', 'EV Charging', 'Covered', 'Under ₹40/hr'];
 const SORT_OPTIONS = ['Nearest', 'Price: Low', 'Rating', 'Availability'];
 
-function ParkingCard({ spot, onPress }) {
+function timeToMinutes(value) {
+  const [h, m] = value.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+/** Parses operahours like "06:00 – 23:00" (en dash) and handles overnight ranges. */
+function isOpenNow(operatingHours) {
+  if (!operatingHours) return true;
+  const parts = operatingHours.replace(/[–—]/g, '-').split('-').map((s) => s.trim());
+  if (parts.length !== 2) return true;
+  const open = timeToMinutes(parts[0]);
+  const close = timeToMinutes(parts[1]);
+  if (open === null || close === null) return true;
+  if (open === 0 && close >= 23 * 60 + 59) return true;
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (open === close) return true;
+  if (close > open) return mins >= open && mins < close;
+  return mins >= open || mins < close;
+}
+
+function ParkingCard({ spot, onPress, onBook }) {
   const isAvailable = spot.status !== 'full';
   const availPct = Math.round((spot.availableSpots / spot.totalSpots) * 100);
 
@@ -100,18 +123,67 @@ function ParkingCard({ spot, onPress }) {
           <Text style={{ fontSize: 12 }}>🕐</Text>
           <Text style={parkStyles.hours}>{spot.operatingHours}</Text>
         </View>
-        <LinearGradient
-          colors={isAvailable ? ['#2FD987', '#1AAD64'] : ['#333', '#222']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={parkStyles.bookBtn}
-        >
-          <Text style={[parkStyles.bookBtnText, !isAvailable && { color: colors.textMuted }]}>
-            {isAvailable ? 'Book Now' : 'Full'}
-          </Text>
-        </LinearGradient>
+        <TouchableOpacity onPress={isAvailable ? onBook : undefined} activeOpacity={0.8} disabled={!isAvailable}>
+          <LinearGradient
+            colors={isAvailable ? ['#2FD987', '#1AAD64'] : ['#333', '#222']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={parkStyles.bookBtn}
+          >
+            <Text style={[parkStyles.bookBtnText, !isAvailable && { color: colors.textMuted }]}>
+              {isAvailable ? 'Book Now' : 'Full'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
+  );
+}
+
+function FilterSheet({ visible, onClose, filter, onFilter, sort, onSort, count }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={sheetStyles.overlay} activeOpacity={1} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 24 }]}>
+        <View style={sheetStyles.handle} />
+        <Text style={sheetStyles.title}>Filters & Sort</Text>
+        <Text style={sheetStyles.subtitle}>Refine the parking spots shown below.</Text>
+
+        <Text style={sheetStyles.sectionLabel}>Category</Text>
+        <View style={sheetStyles.chipWrap}>
+          {FILTERS.map((f) => (
+            <View key={f} style={{ marginBottom: 8 }}>
+              <Chip label={f} active={filter === f} onPress={() => onFilter(f)} />
+            </View>
+          ))}
+        </View>
+
+        <Text style={sheetStyles.sectionLabel}>Sort by</Text>
+        <View style={sheetStyles.chipWrap}>
+          {SORT_OPTIONS.map((s) => (
+            <TouchableOpacity
+              key={s}
+              onPress={() => onSort(s)}
+              style={[sheetStyles.sortChip, sort === s && sheetStyles.sortChipActive]}
+            >
+              <Text style={[sheetStyles.sortText, sort === s && sheetStyles.sortTextActive]}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <SecondaryButton
+          title="Reset filters"
+          onPress={() => { onFilter('All'); onSort('Nearest'); }}
+          style={{ marginTop: 12 }}
+        />
+        <PrimaryButton
+          title={`Show ${count} result${count === 1 ? '' : 's'}`}
+          onPress={onClose}
+          style={{ marginTop: 10 }}
+        />
+      </View>
+    </Modal>
   );
 }
 
@@ -120,6 +192,8 @@ export default function ParkingScreen({ navigation }) {
   const [activeFilter, setActiveFilter] = useState('All');
   const [activeSort, setActiveSort] = useState('Nearest');
   const [view, setView] = useState('list'); // 'list' | 'map'
+  const [filterSheet, setFilterSheet] = useState(false);
+  const tabBarInset = useTabBarInset();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -129,7 +203,7 @@ export default function ParkingScreen({ navigation }) {
 
   const filteredSpots = mockParkingSpots.filter((spot) => {
     if (search && !spot.name.toLowerCase().includes(search.toLowerCase()) && !spot.address.toLowerCase().includes(search.toLowerCase())) return false;
-    if (activeFilter === 'Open Now') return spot.operatingHours === '00:00 – 23:59' || true; // mock: all open
+    if (activeFilter === 'Open Now') return isOpenNow(spot.operatingHours);
     if (activeFilter === 'EV Charging') return spot.amenities.includes('EV Charging');
     if (activeFilter === 'Covered') return spot.amenities.includes('Covered');
     if (activeFilter === 'Under ₹40/hr') return spot.pricePerHour < 40;
@@ -141,6 +215,9 @@ export default function ParkingScreen({ navigation }) {
     if (activeSort === 'Availability') return b.availableSpots - a.availableSpots;
     return 0;
   });
+
+  const filtersDirty = activeFilter !== 'All' || activeSort !== 'Nearest';
+  const pinColWidth = (width - 72) / 3;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -177,20 +254,31 @@ export default function ParkingScreen({ navigation }) {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.filterBtn}>
+        <TouchableOpacity style={styles.filterBtn} onPress={() => setFilterSheet(true)} accessibilityLabel="Open filters">
           <Text style={{ fontSize: 20 }}>⚙</Text>
+          {filtersDirty && <View style={styles.filterDot} />}
         </TouchableOpacity>
       </View>
 
       {/* Filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        contentContainerStyle={styles.filterRow}
+      >
         {FILTERS.map((f) => (
           <Chip key={f} label={f} active={activeFilter === f} onPress={() => setActiveFilter(f)} />
         ))}
       </ScrollView>
 
       {/* Sort */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.filterRow, { paddingTop: 0 }]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        contentContainerStyle={[styles.filterRow, { paddingTop: 0 }]}
+      >
         {SORT_OPTIONS.map((s) => (
           <TouchableOpacity
             key={s}
@@ -202,50 +290,65 @@ export default function ParkingScreen({ navigation }) {
         ))}
       </ScrollView>
 
-      {/* Map Placeholder */}
-      {view === 'map' && (
-        <View style={styles.mapPlaceholder}>
+      {/* Map / List */}
+      {view === 'map' ? (
+        <View style={styles.mapWrap}>
           <LinearGradient colors={['#0A1F18', '#0D2920']} style={StyleSheet.absoluteFill} />
-          <Text style={{ fontSize: 36 }}>🗺️</Text>
-          <Text style={{ fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 16, color: colors.textPrimary, marginTop: 10 }}>
-            Map View
-          </Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
-            Showing {filteredSpots.length} parking spots
-          </Text>
-          {/* Mock map pins */}
+          <View style={styles.mapHeader}>
+            <Text style={{ fontSize: 32 }}>🗺️</Text>
+            <Text style={styles.mapTitle}>Map View</Text>
+            <Text style={styles.mapSub}>
+              {filteredSpots.length} spot{filteredSpots.length === 1 ? '' : 's'} nearby · tap a pin for details
+            </Text>
+          </View>
           {filteredSpots.map((spot, i) => (
             <TouchableOpacity
               key={spot.id}
               onPress={() => navigation.navigate('ParkingDetail', { spot })}
               style={[styles.mapPin, {
-                top: 60 + (i * 40) % 200,
-                left: 40 + (i * 70) % (width - 180),
+                top: 120 + Math.floor(i / 3) * 48,
+                left: 16 + (i % 3) * pinColWidth,
                 backgroundColor: spot.status === 'available' ? colors.primary : spot.status === 'partial' ? colors.warning : colors.error,
               }]}
             >
               <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 11, color: colors.bg }}>₹{spot.pricePerHour}</Text>
             </TouchableOpacity>
           ))}
+          {filteredSpots.length === 0 && (
+            <View style={styles.mapEmpty}>
+              <Text style={{ fontSize: 32 }}>🅿️</Text>
+              <Text style={styles.mapEmptyText}>No spots match your filters</Text>
+            </View>
+          )}
         </View>
+      ) : (
+        <Animated.FlatList
+          data={filteredSpots}
+          keyExtractor={(item) => item.id}
+          style={{ opacity: fadeAnim }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: tabBarInset + 16 }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <EmptyState icon="🅿️" title="No spots found" subtitle="Try adjusting your filters or search term." />
+          }
+          renderItem={({ item }) => (
+            <ParkingCard
+              spot={item}
+              onPress={() => navigation.navigate('ParkingDetail', { spot: item })}
+              onBook={() => navigation.navigate('ParkingDetail', { spot: item, autoBook: true })}
+            />
+          )}
+        />
       )}
 
-      {/* List */}
-      <Animated.FlatList
-        data={filteredSpots}
-        keyExtractor={(item) => item.id}
-        style={{ opacity: fadeAnim }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <EmptyState icon="🅿️" title="No spots found" subtitle="Try adjusting your filters or search term." />
-        }
-        renderItem={({ item }) => (
-          <ParkingCard
-            spot={item}
-            onPress={() => navigation.navigate('ParkingDetail', { spot: item })}
-          />
-        )}
+      <FilterSheet
+        visible={filterSheet}
+        onClose={() => setFilterSheet(false)}
+        filter={activeFilter}
+        onFilter={setActiveFilter}
+        sort={activeSort}
+        onSort={setActiveSort}
+        count={filteredSpots.length}
       />
     </SafeAreaView>
   );
@@ -266,13 +369,19 @@ const styles = StyleSheet.create({
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textPrimary },
   filterBtn: { width: 48, height: 48, backgroundColor: colors.bgCard, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  filterDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
   filterRow: { paddingHorizontal: 20, paddingVertical: 8 },
   sortBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, marginRight: 8, backgroundColor: colors.bgElevated },
   sortBtnActive: { backgroundColor: 'rgba(59,158,255,0.12)' },
   sortText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary },
   sortTextActive: { color: colors.secondary, fontFamily: 'Inter_500Medium' },
-  mapPlaceholder: { margin: 20, height: 220, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+  mapWrap: { flex: 1, margin: 20, marginTop: 4, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  mapHeader: { alignItems: 'center', paddingTop: 18, paddingHorizontal: 20 },
+  mapTitle: { fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 16, color: colors.textPrimary, marginTop: 8 },
+  mapSub: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
   mapPin: { position: 'absolute', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  mapEmpty: { position: 'absolute', top: 180, left: 0, right: 0, alignItems: 'center' },
+  mapEmptyText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginTop: 8 },
 });
 
 const parkStyles = StyleSheet.create({
@@ -292,4 +401,18 @@ const parkStyles = StyleSheet.create({
   hours: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary },
   bookBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
   bookBtnText: { fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 13, color: colors.bg },
+});
+
+const sheetStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' },
+  sheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderColor: colors.border },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 18 },
+  title: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 20, color: colors.textPrimary },
+  subtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 18 },
+  sectionLabel: { fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 13, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
+  sortChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard, marginRight: 8, marginBottom: 8 },
+  sortChipActive: { borderColor: colors.primary, backgroundColor: colors.primaryGlow },
+  sortText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: colors.textSecondary },
+  sortTextActive: { color: colors.primary, fontFamily: 'Inter_600SemiBold' },
 });

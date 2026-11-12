@@ -9,12 +9,20 @@ import {
   StyleSheet,
   Switch,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
-import { Card, Divider, PrimaryButton, SecondaryButton } from '../components/UIComponents';
-import { mockUser, mockStats, mockRecentActivity } from '../data/mockData';
+import { Card, Divider } from '../components/UIComponents';
+import { useTabBarInset } from '../hooks/useTabBarInset';
+import { mockUser, mockStats } from '../data/mockData';
+
+function openLink(url) {
+  Linking.openURL(url).catch(() => {
+    Alert.alert('Unable to open link', 'Please try again from the Play Store app.');
+  });
+}
 
 function SettingRow({ icon, label, value, onPress, toggle, toggleValue, onToggle, danger }) {
   return (
@@ -88,12 +96,28 @@ const mockVehicles = [
 export default function ProfileScreen({ navigation }) {
   const [notifications, setNotifications] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
   const [autoRenew, setAutoRenew] = useState(false);
+  const tabBarInset = useTabBarInset();
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Sign out of CARVIA?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: () => {
+          setNotifications(true);
+          setLocationServices(true);
+          setAutoRenew(false);
+          navigation.navigate('Home', { screen: 'HomeMain' });
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarInset + 16 }} showsVerticalScrollIndicator={false}>
         {/* Hero header */}
         <LinearGradient colors={['#071A14', '#0D1110']} style={profStyles.hero}>
           <View style={profStyles.avatarRing}>
@@ -151,7 +175,12 @@ export default function ProfileScreen({ navigation }) {
               <Divider style={{ marginVertical: 4 }} />
               <SettingRow icon="🧾" label="Transaction History" onPress={() => Alert.alert('History', 'Full transaction history coming soon!')} />
               <Divider style={{ marginVertical: 4 }} />
-              <SettingRow icon="🎁" label="CARVIA Credits" value="₹240" onPress={() => {}} />
+              <SettingRow
+                icon="🎁"
+                label="CARVIA Credits"
+                value="₹240"
+                onPress={() => Alert.alert('CARVIA Credits', 'You have ₹240 in credits. Credits are applied automatically at checkout and expire 12 months after they are earned.')}
+              />
             </Card>
           </View>
 
@@ -163,7 +192,7 @@ export default function ProfileScreen({ navigation }) {
               <Divider style={{ marginVertical: 4 }} />
               <SettingRow icon="📍" label="Location Services" toggle toggleValue={locationServices} onToggle={setLocationServices} />
               <Divider style={{ marginVertical: 4 }} />
-              <SettingRow icon="🌙" label="Dark Mode" toggle toggleValue={darkMode} onToggle={setDarkMode} />
+              <SettingRow icon="🌙" label="Dark Mode" value="Always on" />
               <Divider style={{ marginVertical: 4 }} />
               <SettingRow icon="🔄" label="Auto-renew Parking" toggle toggleValue={autoRenew} onToggle={setAutoRenew} />
             </Card>
@@ -173,22 +202,45 @@ export default function ProfileScreen({ navigation }) {
           <View>
             <Text style={[profStyles.sectionTitle, { marginBottom: 12 }]}>Support</Text>
             <Card>
-              <SettingRow icon="💬" label="Help & Support" onPress={() => Alert.alert('Support', 'Chat with our team 24/7!')} />
+              <SettingRow
+                icon="💬"
+                label="Help & Support"
+                onPress={() => Alert.alert('Help & Support', 'Our team is available 24/7. How would you like to reach us?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Email', onPress: () => openLink('mailto:support@carvia.app?subject=Support%20request') },
+                  { text: 'Call', onPress: () => openLink('tel:+918000000000') },
+                ])}
+              />
               <Divider style={{ marginVertical: 4 }} />
-              <SettingRow icon="⭐" label="Rate CARVIA" onPress={() => Alert.alert('Rate Us', 'Thanks for supporting CARVIA!')} />
+              <SettingRow
+                icon="⭐"
+                label="Rate CARVIA"
+                onPress={() => openLink('https://play.google.com/store/apps/details?id=com.carvia.app')}
+              />
               <Divider style={{ marginVertical: 4 }} />
-              <SettingRow icon="📋" label="Privacy Policy" onPress={() => {}} />
+              <SettingRow
+                icon="📋"
+                label="Privacy Policy"
+                onPress={() => Alert.alert(
+                  'Privacy Policy',
+                  'CARVIA collects only the location, vehicle and payment details needed to provide parking and charging services. We never sell your personal data. You can request deletion of your account data at any time from Help & Support.'
+                )}
+              />
               <Divider style={{ marginVertical: 4 }} />
-              <SettingRow icon="📄" label="Terms of Service" onPress={() => {}} />
+              <SettingRow
+                icon="📄"
+                label="Terms of Service"
+                onPress={() => Alert.alert(
+                  'Terms of Service',
+                  'By using CARVIA you agree to book parking and charging responsibly. Bookings are subject to availability. Cancellations made less than 30 minutes before the start time may incur a fee. Charging costs are billed per kWh at the rate shown before you start.'
+                )}
+              />
             </Card>
           </View>
 
           {/* Sign out */}
           <Card>
-            <SettingRow icon="🚪" label="Sign Out" danger onPress={() => Alert.alert('Sign Out', 'Sign out of CARVIA?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign Out', style: 'destructive', onPress: () => {} },
-            ])} />
+            <SettingRow icon="🚪" label="Sign Out" danger onPress={handleSignOut} />
           </Card>
 
           {/* Footer */}

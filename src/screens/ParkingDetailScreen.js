@@ -9,10 +9,8 @@ import {
   StyleSheet,
   Animated,
   Modal,
-  Alert,
-  Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import {
@@ -21,11 +19,9 @@ import {
   SecondaryButton,
   StatusBadge,
   StarRating,
-  AmenityTag,
   Divider,
 } from '../components/UIComponents';
-
-const { width } = Dimensions.get('window');
+import { useTabBarInset } from '../hooks/useTabBarInset';
 
 const HOURS = ['1 hr', '2 hrs', '3 hrs', '4 hrs', '6 hrs', '8 hrs', '12 hrs'];
 const HOUR_VALS = [1, 2, 3, 4, 6, 8, 12];
@@ -75,14 +71,22 @@ function FloorMap({ availableSpots, totalSpots }) {
 }
 
 function BookingModal({ visible, spot, onClose, onConfirm }) {
+  const insets = useSafeAreaInsets();
+  // Reset to 1 hour every time the sheet opens.
   const [selectedHours, setSelectedHours] = useState(0);
+
+  useEffect(() => {
+    if (visible) setSelectedHours(0);
+  }, [visible]);
+
   const hours = HOUR_VALS[selectedHours];
-  const amount = hours * spot?.pricePerHour;
+  const amount = hours * (spot?.pricePerHour || 0);
   const tax = Math.round(amount * 0.18);
+
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={modalStyles.overlay} activeOpacity={1} onPress={onClose} />
-      <View style={modalStyles.sheet}>
+      <View style={[modalStyles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 24 }]}>
         <View style={modalStyles.handle} />
         <Text style={modalStyles.title}>Book Parking</Text>
         <Text style={modalStyles.spotName}>{spot?.name}</Text>
@@ -124,9 +128,9 @@ function BookingModal({ visible, spot, onClose, onConfirm }) {
   );
 }
 
-function ConfirmModal({ visible, hours, amount, spot, onClose }) {
+function ConfirmModal({ visible, booking, spot, onClose }) {
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ backgroundColor: colors.bgCard, borderRadius: 24, padding: 32, margin: 24, alignItems: 'center', borderWidth: 1, borderColor: colors.border }}>
           <LinearGradient colors={['#1E3D2F', '#0D2920']} style={{ width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
@@ -134,16 +138,16 @@ function ConfirmModal({ visible, hours, amount, spot, onClose }) {
           </LinearGradient>
           <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, color: colors.primary, marginBottom: 8 }}>Booked!</Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 24 }}>
-            Your spot at {spot?.shortName} is confirmed for {hours} hour{hours > 1 ? 's' : ''}.
+            Your spot at {spot?.shortName} is confirmed for {booking?.hours} hour{booking?.hours > 1 ? 's' : ''}.
           </Text>
           <View style={{ backgroundColor: colors.bgElevated, borderRadius: 12, padding: 16, width: '100%', marginBottom: 20 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary }}>Booking ID</Text>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textPrimary }}>#CV{Math.floor(Math.random() * 90000 + 10000)}</Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textPrimary }}>#{booking?.id}</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary }}>Amount Paid</Text>
-              <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13, color: colors.primary }}>₹{amount}</Text>
+              <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13, color: colors.primary }}>₹{booking?.amount}</Text>
             </View>
           </View>
           <PrimaryButton title="Done" onPress={onClose} style={{ width: '100%' }} />
@@ -154,30 +158,42 @@ function ConfirmModal({ visible, hours, amount, spot, onClose }) {
 }
 
 export default function ParkingDetailScreen({ route, navigation }) {
-  const { spot } = route.params;
+  const { spot, autoBook } = route.params;
   const [bookingModal, setBookingModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState(false);
   const [booking, setBooking] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const tabBarInset = useTabBarInset();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
 
+  // "Book Now" on a card jumps straight into the booking sheet.
+  useEffect(() => {
+    if (autoBook && spot.status !== 'full') {
+      setBookingModal(true);
+    }
+  }, [autoBook, spot.status]);
+
   const handleConfirm = (hours, amount) => {
     setBookingModal(false);
-    setBooking({ hours, amount });
+    setBooking({
+      hours,
+      amount,
+      id: `CV${Math.floor(10000 + Math.random() * 90000)}`,
+    });
     setConfirmModal(true);
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       {/* Back button */}
-      <TouchableOpacity onPress={() => navigation.goBack()} style={detailStyles.backBtn}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={detailStyles.backBtn} accessibilityLabel="Go back">
         <Text style={detailStyles.backIcon}>←</Text>
       </TouchableOpacity>
 
-      <Animated.ScrollView style={{ opacity: fadeAnim }} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView style={{ opacity: fadeAnim }} contentContainerStyle={{ paddingBottom: tabBarInset + 16 }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <LinearGradient colors={['#0A2540', '#0D1110']} style={detailStyles.hero}>
           <Text style={detailStyles.heroIcon}>🅿️</Text>
@@ -262,8 +278,7 @@ export default function ParkingDetailScreen({ route, navigation }) {
       />
       <ConfirmModal
         visible={confirmModal}
-        hours={booking?.hours}
-        amount={booking?.amount}
+        booking={booking}
         spot={spot}
         onClose={() => { setConfirmModal(false); navigation.goBack(); }}
       />
@@ -284,7 +299,7 @@ const detailStyles = StyleSheet.create({
 
 const modalStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36, borderWidth: 1, borderColor: colors.border },
+  sheet: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderColor: colors.border },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20 },
   title: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 20, color: colors.textPrimary, marginBottom: 4 },
   spotName: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginBottom: 20 },

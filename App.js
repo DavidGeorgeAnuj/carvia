@@ -1,12 +1,13 @@
 // CARVIA — Root App with Navigation
 
-import React from 'react';
-import { View, Text, StatusBar } from 'react-native';
+import React, { useEffect } from 'react';
+import { StatusBar } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -28,6 +29,9 @@ import EVDetailScreen from './src/screens/EVDetailScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import CustomTabBar from './src/components/CustomTabBar';
 import { colors } from './src/theme/colors';
+
+// Keep the native splash on screen until the custom fonts are ready.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -87,33 +91,8 @@ function ProfileStack() {
   );
 }
 
-// Loading / splash screen
-function SplashScreen() {
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{
-        fontFamily: 'SpaceGrotesk_700Bold',
-        fontSize: 42,
-        color: colors.primary,
-        letterSpacing: 4,
-      }}>
-        CARVIA
-      </Text>
-      <Text style={{
-        fontFamily: 'Inter_400Regular',
-        fontSize: 14,
-        color: colors.textSecondary,
-        marginTop: 8,
-        letterSpacing: 1,
-      }}>
-        One platform. Every journey.
-      </Text>
-    </View>
-  );
-}
-
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -124,9 +103,14 @@ export default function App() {
     SpaceGrotesk_700Bold,
   });
 
-  if (!fontsLoaded) {
-    return <SplashScreen />;
-  }
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  // The native splash screen stays visible until fonts resolve.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
