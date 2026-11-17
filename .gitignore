@@ -38,7 +38,9 @@ yarn-error.*
 
 # generated native folders
 /ios
-/android
+
+# Flutter Android
+!android/app/src/main/AndroidManifest.xml
 
 # IDE
 .idea/
