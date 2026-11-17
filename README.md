@@ -2,6 +2,9 @@
 
 A dark-themed, production-quality Android app replicating [carvia-india.vercel.app](https://carvia-india.vercel.app/) built with **React Native (Expo)**.
 
+- **Official Repository:** [https://github.com/DavidGeorgeAnuj/carvia](https://github.com/DavidGeorgeAnuj/carvia)
+- **Maintainer:** DavidGeorgeAnuj (davidgeorgeanuj@gmail.com)
+
 ---
 
 ## Features
@@ -27,10 +30,11 @@ A dark-themed, production-quality Android app replicating [carvia-india.vercel.a
 ### Steps
 
 ```bash
-# 1. Navigate to the project
-cd C:\Users\david.george\.gemini\antigravity\scratch\carvia-app
+# 1. Clone the canonical repository
+git clone https://github.com/DavidGeorgeAnuj/carvia.git
+cd carvia-app
 
-# 2. Install dependencies (already done)
+# 2. Install dependencies
 npm install
 
 # 3. Start the dev server

@@ -1,5 +1,12 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
+## Repository & Version Control
+
+- **Canonical Repository:** `https://github.com/DavidGeorgeAnuj/carvia.git`
+- **Default Branch:** `main`
+- **Committer / Author:** `DavidGeorgeAnuj <davidgeorgeanuj@gmail.com>`
+- Never change or push to any other remote repository without explicit user instructions.
+
 ## Expo has changed — do not trust your training data
 
 Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
