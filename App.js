@@ -22,6 +22,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 
 import HomeScreen from './src/screens/HomeScreen';
+import MapMainScreen from './src/screens/MapMainScreen';
 import ParkingScreen from './src/screens/ParkingScreen';
 import ParkingDetailScreen from './src/screens/ParkingDetailScreen';
 import EVScreen from './src/screens/EVScreen';
@@ -50,6 +51,17 @@ const CarviaNavTheme = {
     notification: colors.primary,
   },
 };
+
+// Map Stack (Primary UI)
+function MapStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Screen name="MapMain" component={MapMainScreen} />
+      <Stack.Screen name="EVDetail" component={EVDetailScreen} />
+      <Stack.Screen name="ParkingDetail" component={ParkingDetailScreen} />
+    </Stack.Navigator>
+  );
+}
 
 // Home Stack
 function HomeStack() {
@@ -119,10 +131,11 @@ export default function App() {
         <Tab.Navigator
           tabBar={(props) => <CustomTabBar {...props} />}
           screenOptions={{ headerShown: false }}
+          initialRouteName="Map"
         >
-          <Tab.Screen name="Home" component={HomeStack} />
-          <Tab.Screen name="Parking" component={ParkingStack} />
+          <Tab.Screen name="Map" component={MapStack} />
           <Tab.Screen name="EV" component={EVStack} />
+          <Tab.Screen name="Parking" component={ParkingStack} />
           <Tab.Screen name="Profile" component={ProfileStack} />
         </Tab.Navigator>
       </NavigationContainer>

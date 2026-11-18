@@ -1,213 +1,123 @@
-# CARVIA — Android App
+<div align="center">
 
-A dark-themed, production-quality Android app replicating [carvia-india.vercel.app](https://carvia-india.vercel.app/) built with **React Native (Expo)**.
+# ⚡ CARVIA
 
-- **Official Repository:** [https://github.com/DavidGeorgeAnuj/carvia](https://github.com/DavidGeorgeAnuj/carvia)
-- **Maintainer:** DavidGeorgeAnuj (davidgeorgeanuj@gmail.com)
+### One platform. Every journey.
+**Next-generation smart EV charging and parking navigation for India.**
 
----
+[![React Native](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactnative.dev)
+[![Expo](https://img.shields.io/badge/Expo-SDK_58-000020?style=flat-square&logo=expo&logoColor=white)](https://expo.dev)
+[![Google Maps](https://img.shields.io/badge/Google_Maps-API_Integrated-4285F4?style=flat-square&logo=googlemaps&logoColor=white)](https://cloud.google.com/maps-platform)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2FD987?style=flat-square)](LICENSE)
+[![Theme: Dark Automotive](https://img.shields.io/badge/Theme-Dark_Automotive-0D1110?style=flat-square&color=2FD987)](#design-system)
 
-## Features
+[Key Features](#-highlights) • [Maintainers](#-maintainers) • [Core Modules](#-core-screens--modules) • [Tech Stack](#-tech-stack) • [Quick Start](#-quick-start)
 
-| Screen | What it does |
-|---|---|
-| 🏠 **Home** | Greeting, quick-action cards, nearby spots, stats dashboard, recent activity |
-| 🅿️ **Smart Parking** | Search, filter, sort, map view with pins, spot cards with availability bars |
-| 📋 **Parking Detail** | Floor map, booking modal, duration selector, price breakdown, confirmation |
-| ⚡ **EV Charging** | Station list, connector badges, real-time availability stats |
-| 🔌 **EV Detail** | Connector selector, live charging session timer, cost estimator |
-| 👤 **Profile** | Vehicle cards with battery indicator, stats, settings, payment info |
+</div>
 
 ---
 
-## Tech Stack
+## 🌟 Highlights
 
-| Layer | Choice |
-|---|---|
-| Version | **1.0.1** |
-| SDK | Expo **58** (`expo ~58.0.24`) |
-| Runtime | React Native **0.88.1**, React **19.3**, Hermes |
-| Navigation | React Navigation 7 (bottom tabs + nested native stacks) |
-| UI | Custom dark design system, `expo-linear-gradient`, `react-native-svg` |
-| Fonts | Space Grotesk + Inter (`@expo-google-fonts/*`, loaded with `expo-font`) |
-| Native config | CNG — no `android/` or `ios/` folders are committed |
+**CARVIA** is a connected automotive mobile application designed for electric vehicle drivers and urban commuters. Built with an obsidian dark automotive aesthetic (`#0D1110`), CARVIA combines real-time **EV Supercharging discovery** with **Smart Parking reservations** in one seamless platform.
 
-The app currently uses **React Navigation**, not Expo Router. `index.js` registers `App.js` with `registerRootComponent`, and `App.js` defines the tab/stack tree.
+- 🗺️ **Interactive Google Map Engine:** Real-time dark-themed vector map with custom animated power badges (`150 kW`, `60 kW`, `₹40/h`) and live availability rings.
+- ⚡ **EV Charging Telemetry:** Dynamic connector status (CCS2, Type 2, CHAdeMO), real-time charging session simulation, kWh counter, and live tariff calculators.
+- 🅿️ **Smart Parking Reservation:** Instant slot vacancy indicators, covered parking filters, and hourly slot booking with digital receipts.
+- 🔀 **Instant Mode Switcher:** Switch between EV Charging and Parking modes on the fly with a single tap.
+- 🎨 **Bespoke Automotive UI:** High-contrast emerald green (`#2FD987`) and electric blue (`#3B9EFF`) accents on obsidian black, paired with Space Grotesk & Inter typography.
 
 ---
 
-## Running the App
+## 👥 Maintainers
+
+| Maintainer | GitHub | Contact |
+| :--- | :--- | :--- |
+| **David George Anuj** | [@DavidGeorgeAnuj](https://github.com/DavidGeorgeAnuj) | `davidgeorgeanuj@gmail.com` |
+| **Joe Lonney** | [@joelonney](https://github.com/joelonney) | `joelonney@gmail.com` |
+
+---
+
+## 📱 Core Screens & Modules
+
+| Screen | Focus | Highlights |
+| :--- | :--- | :--- |
+| 🗺️ **Live Map** | Primary UI | Fullscreen Google Map, mode switcher, Bengaluru area search, filter chips, and bottom preview cards |
+| ⚡ **EV Stations** | Charging Feed | Station list sorted by speed, distance, or price with live connector badges (CCS2, Type 2, CHAdeMO) |
+| 🅿️ **Smart Parking** | Parking Feed | Real-time vacancy bars, covered parking indicators, CCTV filters, and hourly rates |
+| 🔌 **Live Session** | Telemetry | Animated battery SoC % arc, live kWh counter, charging timer, and emergency stop button |
+| 👤 **Garage & Profile**| Vehicle Hub | Registered EVs (Tata Nexon EV Max), wallet balance, charging history, and app preferences |
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework:** React Native `0.88.1` & Expo SDK `58`
+- **Navigation:** React Navigation 7 (Floating bottom tab bar + nested native stacks)
+- **Mapping:** Google Maps JavaScript API with Night Theme styling + `react-native-maps` for native Android
+- **Styling & Assets:** Custom dark automotive design system with `expo-linear-gradient` and `react-native-svg`
+- **Typography:** Space Grotesk (Headings) + Inter (Body) via `@expo-google-fonts`
+- **Alternative Implementation:** Complete Flutter 3 (Dart) architecture available in `lib/`
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
+- **Node.js** `20+` or `22+`
+- **Android Studio** with emulator, or a physical Android device with **Expo Go**
 
-- **Node.js** `22.13+` or `24.3+` (required by Expo 58 / RN 0.88 — Node 18 is not supported)
-- **Android Studio** with an emulator, **or** a physical Android device with **Expo Go for SDK 58**
-- No global Expo/EAS CLI install is needed — use `npx` (this project uses npm; there is no `bun.lock`)
-
-### Install and start
-
+### 1. Clone the repository
 ```bash
-# 1. Install dependencies
+git clone https://github.com/DavidGeorgeAnuj/carvia.git
+cd carvia
+```
+
+### 2. Install dependencies
+```bash
 npm install
 ```
 
-There are two ways to run the app. **You do not need Expo Go.**
-
-**Option A — Development build (no Expo Go)**
-
+### 3. Configure Environment Variables
+Copy the example environment file and add your Google Maps API key:
 ```bash
-npm run android   # expo run:android: generates android/, builds a debug APK, installs & launches it
+cp .env.example .env
 ```
+Inside `.env`:
+```env
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+```
+> **Note:** The Google Maps API key is kept strictly in your local `.env` file (git-ignored) and is never committed to source control.
 
-This compiles a native debug build with Gradle and installs it directly on the emulator/device. It needs **JDK 17+** and the Android SDK (`ANDROID_HOME`). The generated `android/` and `ios/` folders are git-ignored — never edit them by hand; configure native behavior in `app.json`.
+### 4. Launch Development Server
+```bash
+# Start Metro bundler (Web, Android, iOS)
+npm start
 
-```powershell
-# Typical Windows setup for the native build
-$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+# Or directly target Android:
 npm run android
-```
 
-**Option B — Expo Go**
-
-```bash
-npx expo start --android   # opens the project in Expo Go
-```
-
-Expo Go only contains Expo's bundled native modules, so use Option A once you add a library with native code.
-
-### Start an Android emulator (Windows)
-
-```powershell
-$sdk = "$env:LOCALAPPDATA\Android\Sdk"
-
-# List available AVDs
-& "$sdk\emulator\emulator.exe" -list-avds
-
-# Boot one (example AVD name)
-& "$sdk\emulator\emulator.exe" -avd Medium_Phone_API_37.0
-
-# Verify the device is connected before running the app
-& "$sdk\platform-tools\adb.exe" devices
-```
-
-Then run `npm run android` from the project root.
-
-### Expo Go on a physical device
-
-1. Install **Expo Go** from the Play Store (it must support SDK 58).
-2. Make sure phone and computer are on the same Wi-Fi.
-3. Run `npm start` and scan the QR code.
-4. If the LAN connection is blocked, retry with `npx expo start --tunnel`.
-
-### Useful scripts
-
-| Command | Description |
-|---|---|
-| `npm start` | Start Metro / dev server |
-| `npm run android` | Start Metro and open on Android |
-| `npm run ios` | Start Metro and open on iOS (macOS only) |
-| `npm run web` | Start the web target |
-
-### Adding dependencies
-
-Always install Expo/React Native packages through Expo so versions match the SDK:
-
-```bash
-npx expo install <package>
-```
-
-A library with native code cannot run in Expo Go — it requires a development build (`npx expo run:android`) or an EAS build.
-
-### Build a standalone Android app (EAS Build)
-
-```bash
-# Login and configure (eas.json is generated)
-npx eas-cli@latest login
-npx eas-cli@latest build:configure
-
-# Production build (AAB for Play Store)
-npx eas-cli@latest build --platform android
-
-# Installable APK (requires a "preview" profile with buildType: "apk" in eas.json)
-npx eas-cli@latest build --platform android --profile preview
+# Or preview in your browser:
+npm run web
 ```
 
 ---
 
-## Project Structure
+## 🎨 Design System Tokens
 
-```
-carvia_app/
-├── index.js                      # Entry point — registerRootComponent(App)
-├── App.js                        # Root navigator: tabs + nested stacks, font loading
-├── app.json                      # Expo config (branding, icons, plugins)
-├── assets/                       # App icon, adaptive icon layers, splash, favicon
-├── src/
-│   ├── theme/
-│   │   └── colors.js             # Design tokens
-│   ├── data/
-│   │   └── mockData.js           # Realistic Bengaluru mock data
-│   ├── components/
-│   │   ├── UIComponents.js       # Reusable: Button, Card, Chip, Badge…
-│   │   └── CustomTabBar.js       # Animated floating tab bar
-│   └── screens/
-│       ├── HomeScreen.js
-│       ├── ParkingScreen.js
-│       ├── ParkingDetailScreen.js
-│       ├── EVScreen.js
-│       ├── EVDetailScreen.js
-│       └── ProfileScreen.js
-└── AGENTS.md                     # Conventions for AI-assisted development
-```
-
-### Navigation
-
-- Bottom tabs (custom `CustomTabBar`): **Home**, **Parking**, **EV**, **Profile**
-- Each tab hosts its own native stack:
-  - Home → `ParkingDetail`, `EVDetail`
-  - Parking → `ParkingDetail`
-  - EV → `EVDetail`
-  - Profile (single screen)
-- Headers are hidden; screens draw their own top bars with safe-area insets.
+| Token | Hex | Role |
+| :--- | :--- | :--- |
+| `bg` | `#0D1110` | Obsidian deep canvas |
+| `surface` | `#141918` | Elevated container surface |
+| `card` | `#1A201E` | Card surface |
+| `primary` | `#2FD987` | Electric emerald green (EV brand accent) |
+| `secondary`| `#3B9EFF` | Parking cobalt blue |
+| `warning` | `#FFB930` | Limited availability / busy |
+| `error` | `#FF5A5A` | Full / occupied / stop |
+| `textPrimary`| `#F0F4F2`| Crisp headings & readout text |
+| `textSecondary`| `#8A9E98`| Subtitles & metadata |
 
 ---
 
-## Design System
-
-| Token | Value |
-|---|---|
-| Background | `#0D1110` (near-black) |
-| Elevated surface | `#141918` |
-| Card surface | `#1A201E` |
-| Primary accent | `#2FD987` (electric green) |
-| Secondary accent | `#3B9EFF` (parking blue) |
-| Text primary / secondary | `#F0F4F2` / `#8A9E96` |
-| Border | `#1E2D29` |
-| Typography | Space Grotesk (headings) + Inter (body) |
-
-Tokens live in `src/theme/colors.js`; font families are loaded once in `App.js` and referenced by name.
-
----
-
-## Mock Data
-
-All data is realistic and Bengaluru-based:
-- **Parking spots**: Nexus Koramangala, Forum Mall, BBMP Indiranagar, Prestige Tech Park, Phoenix Marketcity
-- **EV stations**: Tata Power EZ Charge, Ather Grid, BESCOM EVCS, ChargeZone, bp Pulse
-- **Connectors**: CCS2, CHAdeMO, Type 2 AC, Ather Grid
-
-> To connect a real backend, replace `src/data/mockData.js` exports with API calls.
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Expo Go crashes or shows an SDK mismatch | Install the Expo Go build matching **SDK 58**, or run `npx expo start --android` and accept the install prompt |
-| Emulator not detected | `adb devices` must list a `device`, not `offline`; restart the AVD or `adb kill-server` |
-| Config changes not applied | Restart Metro with a cleared cache: `npx expo start -c` |
-| Dependency warnings | Run `npx expo-doctor` and `npx expo install --fix` |
-| Wrong status bar / splash in Expo Go | Native splash and status bar config only fully apply in a development or release build |
-| Windows native build fails with "Filename longer than 260 characters" (Ninja) | Upgrade `ninja.exe` in `$env:LOCALAPPDATA\Android\Sdk\cmake\<version>\bin` to Ninja 1.12+ (which supports Windows long paths) or install CMake 3.31+ |
+## 📄 License
+This project is licensed under the [MIT License](LICENSE).

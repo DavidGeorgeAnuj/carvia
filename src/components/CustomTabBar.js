@@ -7,9 +7,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
 const TABS = [
-  { key: 'Home', label: 'Home', icon: '🏠', activeIcon: '🏠', root: 'HomeMain' },
+  { key: 'Map', label: 'Live Map', icon: '🗺️', activeIcon: '🗺️', root: 'MapMain' },
+  { key: 'EV', label: 'EV Stations', icon: '⚡', activeIcon: '⚡', root: 'EVMain' },
   { key: 'Parking', label: 'Parking', icon: '🅿️', activeIcon: '🅿️', root: 'ParkingMain' },
-  { key: 'EV', label: 'Charging', icon: '⚡', activeIcon: '⚡', root: 'EVMain' },
   { key: 'Profile', label: 'Profile', icon: '👤', activeIcon: '👤', root: 'ProfileMain' },
 ];
 
