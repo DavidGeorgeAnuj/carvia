@@ -1,5 +1,5 @@
 // CARVIA Main Screen — Google Maps style live map as the central UI
-// Supports seamless switching between EV Charging and Smart Parking modes
+// Unified EV Charging & Smart Parking destination search and selection
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Modal,
   Dimensions,
   Platform,
 } from 'react-native';
@@ -17,14 +16,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import InteractiveMap from '../components/InteractiveMap';
-import ModeSelectModal from '../components/ModeSelectModal';
 import { mockEVStations, mockParkingSpots } from '../data/mockData';
 
 const { width } = Dimensions.get('window');
 
-// Filter presets
-const EV_FILTERS = ['All', '⚡ 50kW+ Fast', '🚀 120kW+ Ultra', '🟢 Available', '🔌 CCS2', '24/7 Open'];
-const PARKING_FILTERS = ['All', '🟢 Available', '🏢 Covered', '🛡️ CCTV', '⚡ EV Ready', '< ₹40/hr'];
+// Combine EV stations and parking spots into a unified destination directory
+const ALL_DESTINATIONS = [
+  ...mockEVStations.map((s) => ({
+    ...s,
+    category: 'ev',
+    categoryLabel: 'EV Fast Charging',
+    badgeIcon: '⚡',
+  })),
+  ...mockParkingSpots.map((p) => ({
+    ...p,
+    category: 'parking',
+    categoryLabel: 'Smart Parking',
+    badgeIcon: '🅿️',
+  })),
+];
 
 // Quick Area shortcuts for Bengaluru
 const BENGALURU_AREAS = [
@@ -35,135 +45,167 @@ const BENGALURU_AREAS = [
   { name: 'MG Road', lat: 12.9756, lng: 77.6066 },
 ];
 
-export default function MapMainScreen({ navigation }) {
-  // Mode state: 'ev' | 'parking'
-  const [mode, setMode] = useState('ev');
-  const [showModeModal, setShowModeModal] = useState(false);
+const FILTER_PILLS = [
+  'All',
+  '⚡ EV Charging',
+  '🅿️ Parking',
+  '🟢 Available',
+  '⚡ 50kW+ Fast',
+  '🏢 Covered',
+  '< ₹40 / Rate',
+];
 
+export default function MapMainScreen({ navigation }) {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState(null);
 
-  // Booking / Charging Modals
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [bookingHours, setBookingHours] = useState(2);
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  // Filtered destinations on the map
+  const visibleLocations = useMemo(() => {
+    return ALL_DESTINATIONS.filter((item) => {
+      // 1. Filter pill criteria
+      if (activeFilter === '⚡ EV Charging' && item.category !== 'ev') return false;
+      if (activeFilter === '🅿️ Parking' && item.category !== 'parking') return false;
+      if (activeFilter === '🟢 Available') {
+        const isAvail = item.category === 'ev'
+          ? (item.availableChargers > 0 || item.status === 'available')
+          : (item.availableSpots > 0 || item.status === 'available');
+        if (!isAvail) return false;
+      }
+      if (activeFilter === '⚡ 50kW+ Fast') {
+        if (item.category !== 'ev' || (item.maxPower || 0) < 50) return false;
+      }
+      if (activeFilter === '🏢 Covered') {
+        if (item.category !== 'parking' || !item.amenities?.includes('Covered')) return false;
+      }
+      if (activeFilter === '< ₹40 / Rate') {
+        if (item.category === 'ev' && (item.pricePerUnit || 0) > 40) return false;
+        if (item.category === 'parking' && (item.pricePerHour || 0) > 40) return false;
+      }
 
-  const [showChargeModal, setShowChargeModal] = useState(false);
-  const [chargeTimer, setChargeTimer] = useState(0);
-  const [chargeActive, setChargeActive] = useState(false);
-
-  // Get raw list based on mode
-  const rawLocations = mode === 'ev' ? mockEVStations : mockParkingSpots;
-
-  // Filtered locations
-  const filteredLocations = useMemo(() => {
-    return rawLocations.filter((item) => {
-      // Search matching
+      // 2. Search query matching
       if (searchQuery.trim().length > 0) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = item.name.toLowerCase().includes(q);
+        const q = searchQuery.toLowerCase().trim();
+        const matchesName = item.name.toLowerCase().includes(q) || (item.shortName && item.shortName.toLowerCase().includes(q));
         const matchesAddr = item.address.toLowerCase().includes(q);
         const matchesNet = item.network ? item.network.toLowerCase().includes(q) : false;
         if (!matchesName && !matchesAddr && !matchesNet) return false;
       }
 
-      // Filter pills
-      if (mode === 'ev') {
-        if (activeFilter === '⚡ 50kW+ Fast') return (item.maxPower || 0) >= 50;
-        if (activeFilter === '🚀 120kW+ Ultra') return (item.maxPower || 0) >= 120;
-        if (activeFilter === '🟢 Available') return item.availableChargers > 0 || item.status === 'available';
-        if (activeFilter === '🔌 CCS2') return item.connectors?.some((c) => c.type === 'CCS2');
-        if (activeFilter === '24/7 Open') return item.operatingHours === '00:00 – 23:59';
-      } else {
-        if (activeFilter === '🟢 Available') return item.availableSpots > 0 || item.status === 'available';
-        if (activeFilter === '🏢 Covered') return item.amenities?.includes('Covered');
-        if (activeFilter === '🛡️ CCTV') return item.amenities?.includes('CCTV');
-        if (activeFilter === '⚡ EV Ready') return item.amenities?.includes('EV Charging');
-        if (activeFilter === '< ₹40/hr') return item.pricePerHour <= 40;
-      }
-
       return true;
     });
-  }, [rawLocations, searchQuery, activeFilter, mode]);
+  }, [searchQuery, activeFilter]);
 
-  const handleSelectMode = (newMode) => {
-    setMode(newMode);
-    setShowModeModal(false);
-    setSelectedLocation(null);
-    setActiveFilter('All');
+  // Google Maps style live search results dropdown
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase().trim();
+    return ALL_DESTINATIONS.filter((item) => {
+      const matchesName = item.name.toLowerCase().includes(q) || (item.shortName && item.shortName.toLowerCase().includes(q));
+      const matchesAddr = item.address.toLowerCase().includes(q);
+      const matchesNet = item.network ? item.network.toLowerCase().includes(q) : false;
+      return matchesName || matchesAddr || matchesNet;
+    }).slice(0, 5);
+  }, [searchQuery]);
+
+  const handleSelectSearchResult = (dest) => {
+    setSelectedLocation(dest);
+    setIsSearchFocused(false);
   };
 
-  const handleStartBooking = () => {
-    setShowBookingModal(true);
-    setBookingConfirmed(false);
-  };
-
-  const handleStartCharging = () => {
-    setShowChargeModal(true);
-    setChargeActive(true);
-    setChargeTimer(0);
+  const handleNavigateToDetail = (dest, autoAction = false) => {
+    if (dest.category === 'ev') {
+      navigation.navigate('EVDetail', { station: dest });
+    } else {
+      navigation.navigate('ParkingDetail', { spot: dest, autoBook: autoAction });
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/* 1. Fullscreen Interactive Map */}
+      {/* 1. Fullscreen Google Map with Dynamic EV & Parking Markers */}
       <InteractiveMap
-        locations={filteredLocations}
-        mode={mode}
+        locations={visibleLocations}
         selectedLocation={selectedLocation}
         onSelectLocation={setSelectedLocation}
         center={[12.9352, 77.6245]}
         zoom={13}
       />
 
-      {/* 2. Floating Top Header & Search Bar */}
-      <SafeAreaView style={styles.floatingHeader} edges={['top']}>
-        {/* Mode Switcher Pill */}
-        <View style={styles.modePillContainer}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handleSelectMode('ev')}
-            style={[styles.modeTab, mode === 'ev' && styles.modeTabActiveEV]}
-          >
-            <Text style={[styles.modeTabText, mode === 'ev' && styles.modeTabTextActiveEV]}>
-              ⚡ EV Charging
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handleSelectMode('parking')}
-            style={[styles.modeTab, mode === 'parking' && styles.modeTabActiveParking]}
-          >
-            <Text style={[styles.modeTabText, mode === 'parking' && styles.modeTabTextActiveParking]}>
-              🅿️ Smart Parking
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
+      {/* 2. Floating Header & Google Maps-Style Search Bar */}
+      <SafeAreaView style={styles.floatingHeader} edges={['top']} pointerEvents="box-none">
+        {/* Search Bar Input */}
         <View style={styles.searchBox}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+          <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={
-              mode === 'ev'
-                ? 'Search chargers, areas (Koramangala, Whitefield)...'
-                : 'Search parking spots, malls, areas...'
-            }
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (!isSearchFocused) setIsSearchFocused(true);
+            }}
+            onFocus={() => setIsSearchFocused(true)}
+            placeholder="Search EV chargers, parking, places in Bengaluru..."
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>✕</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery('');
+                setIsSearchFocused(false);
+              }}
+              style={styles.clearSearchBtn}
+            >
+              <Text style={styles.clearSearchText}>✕</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Quick Bengaluru Area Chips */}
+        {/* Google Maps Live Autocomplete / Destination Search Results Dropdown */}
+        {isSearchFocused && searchResults.length > 0 && (
+          <View style={styles.searchResultsDropdown}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={{ maxHeight: 280 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.dropdownHeaderLabel}>SUGGESTED DESTINATIONS</Text>
+              {searchResults.map((dest) => {
+                const isEV = dest.category === 'ev';
+                return (
+                  <TouchableOpacity
+                    key={dest.id}
+                    onPress={() => handleSelectSearchResult(dest)}
+                    style={styles.searchResultItem}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.resultIconCircle, isEV ? styles.iconCircleEV : styles.iconCircleParking]}>
+                      <Text style={{ fontSize: 16 }}>{isEV ? '⚡' : '🅿️'}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.resultItemName} numberOfLines={1}>
+                        {dest.name}
+                      </Text>
+                      <Text style={styles.resultItemAddress} numberOfLines={1}>
+                        📍 {dest.address}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.resultBadgeText, isEV ? { color: colors.primary } : { color: colors.secondary }]}>
+                        {isEV ? `₹${dest.pricePerUnit}/kWh` : `₹${dest.pricePerHour}/hr`}
+                      </Text>
+                      <Text style={styles.resultDistText}>{dest.distance}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Quick Area Chips (Koramangala, Indiranagar, etc.) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -174,6 +216,7 @@ export default function MapMainScreen({ navigation }) {
               key={area.name}
               onPress={() => {
                 setSearchQuery(area.name);
+                setIsSearchFocused(false);
               }}
               style={styles.areaChip}
             >
@@ -182,21 +225,24 @@ export default function MapMainScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {/* Filter Chips Row */}
+        {/* Filter Pills (All, EV Charging, Parking, etc.) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterScroll}
         >
-          {(mode === 'ev' ? EV_FILTERS : PARKING_FILTERS).map((filter) => {
-            const isActive = activeFilter === filter;
+          {FILTER_PILLS.map((pill) => {
+            const isActive = activeFilter === pill;
+            const isEVFilter = pill.includes('⚡') || pill.includes('EV');
+            const isParkingFilter = pill.includes('🅿️') || pill.includes('Covered');
+
             return (
               <TouchableOpacity
-                key={filter}
-                onPress={() => setActiveFilter(filter)}
+                key={pill}
+                onPress={() => setActiveFilter(pill)}
                 style={[
                   styles.filterChip,
-                  isActive && (mode === 'ev' ? styles.filterChipActiveEV : styles.filterChipActiveParking),
+                  isActive && (isParkingFilter ? styles.filterChipActiveParking : styles.filterChipActive),
                 ]}
               >
                 <Text
@@ -205,7 +251,7 @@ export default function MapMainScreen({ navigation }) {
                     isActive && styles.filterChipTextActive,
                   ]}
                 >
-                  {filter}
+                  {pill}
                 </Text>
               </TouchableOpacity>
             );
@@ -213,63 +259,76 @@ export default function MapMainScreen({ navigation }) {
         </ScrollView>
       </SafeAreaView>
 
-      {/* 3. Floating Location Recenter Button */}
+      {/* 3. Floating Recenter / Clear Selection Button */}
       <View style={styles.floatingControls}>
         <TouchableOpacity
           onPress={() => {
             setSelectedLocation(null);
             setSearchQuery('');
+            setIsSearchFocused(false);
           }}
           style={styles.floatingBtn}
+          accessibilityLabel="Recenter Map"
         >
           <Text style={{ fontSize: 20 }}>🎯</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowModeModal(true)}
-          style={[styles.floatingBtn, { marginTop: 10 }]}
-        >
-          <Text style={{ fontSize: 18 }}>🔀</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* 4. Bottom Sliding Location Preview Sheet (When a pin is tapped) */}
+      {/* 4. Google Maps-Style Destination Selection Preview Card */}
       {selectedLocation && (
-        <View style={styles.bottomSheet}>
+        <View style={styles.bottomSheet} pointerEvents="box-none">
           <LinearGradient
-            colors={['#141918', '#0D1110']}
+            colors={['#161D1A', '#0D1110']}
             style={styles.bottomSheetGradient}
           >
-            {/* Header */}
+            {/* Header / Category Badge & Rating */}
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1, marginRight: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <Text style={styles.sheetBadge}>
-                    {mode === 'ev' ? (selectedLocation.network || 'EV CHARGING') : 'SMART PARKING'}
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <View
+                    style={[
+                      styles.categoryBadgeContainer,
+                      selectedLocation.category === 'ev' ? styles.badgeEV : styles.badgeParking,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.sheetBadge,
+                        selectedLocation.category === 'ev' ? { color: colors.primary } : { color: colors.secondary },
+                      ]}
+                    >
+                      {selectedLocation.category === 'ev'
+                        ? `⚡ ${selectedLocation.network || 'EV CHARGING'}`
+                        : `🅿️ SMART PARKING`}
+                    </Text>
+                  </View>
                   <Text style={styles.sheetRating}>★ {selectedLocation.rating}</Text>
+                  <Text style={styles.reviewCount}>({selectedLocation.totalReviews || 120}+ reviews)</Text>
                 </View>
+
                 <Text style={styles.sheetTitle} numberOfLines={1}>
                   {selectedLocation.name}
                 </Text>
                 <Text style={styles.sheetAddress} numberOfLines={1}>
-                  {selectedLocation.address}
+                  📍 {selectedLocation.address} · {selectedLocation.distance} away
                 </Text>
               </View>
 
               <TouchableOpacity
                 onPress={() => setSelectedLocation(null)}
                 style={styles.closeBtn}
+                accessibilityLabel="Close Preview"
               >
                 <Text style={{ color: colors.textSecondary, fontSize: 16 }}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Key Metrics Row */}
+            {/* Quick Metrics Row */}
             <View style={styles.metricsRow}>
-              {mode === 'ev' ? (
+              {selectedLocation.category === 'ev' ? (
                 <>
                   <View style={styles.metricItem}>
-                    <Text style={styles.metricVal}>₹{selectedLocation.pricePerUnit || 16}</Text>
+                    <Text style={styles.metricVal}>₹{selectedLocation.pricePerUnit || 15}</Text>
                     <Text style={styles.metricLbl}>/ kWh</Text>
                   </View>
                   <View style={styles.metricDivider} />
@@ -284,12 +343,12 @@ export default function MapMainScreen({ navigation }) {
                     <Text style={[styles.metricVal, { color: colors.secondary }]}>
                       {selectedLocation.maxPower || 60} kW
                     </Text>
-                    <Text style={styles.metricLbl}>max power</Text>
+                    <Text style={styles.metricLbl}>fast speed</Text>
                   </View>
                   <View style={styles.metricDivider} />
                   <View style={styles.metricItem}>
-                    <Text style={styles.metricVal}>{selectedLocation.distance || '1.2 km'}</Text>
-                    <Text style={styles.metricLbl}>away</Text>
+                    <Text style={styles.metricVal}>{selectedLocation.distance || '0.6 km'}</Text>
+                    <Text style={styles.metricLbl}>distance</Text>
                   </View>
                 </>
               ) : (
@@ -300,7 +359,7 @@ export default function MapMainScreen({ navigation }) {
                   </View>
                   <View style={styles.metricDivider} />
                   <View style={styles.metricItem}>
-                    <Text style={[styles.metricVal, { color: colors.primary }]}>
+                    <Text style={[styles.metricVal, { color: colors.secondary }]}>
                       {selectedLocation.availableSpots || 42} free
                     </Text>
                     <Text style={styles.metricLbl}>spots left</Text>
@@ -308,180 +367,51 @@ export default function MapMainScreen({ navigation }) {
                   <View style={styles.metricDivider} />
                   <View style={styles.metricItem}>
                     <Text style={styles.metricVal}>{selectedLocation.operatingHours ? '24/7' : 'Covered'}</Text>
-                    <Text style={styles.metricLbl}>type</Text>
+                    <Text style={styles.metricLbl}>facility</Text>
                   </View>
                   <View style={styles.metricDivider} />
                   <View style={styles.metricItem}>
-                    <Text style={styles.metricVal}>{selectedLocation.distance || '0.8 km'}</Text>
-                    <Text style={styles.metricLbl}>away</Text>
+                    <Text style={styles.metricVal}>{selectedLocation.distance || '0.4 km'}</Text>
+                    <Text style={styles.metricLbl}>distance</Text>
                   </View>
                 </>
               )}
             </View>
 
-            {/* Action Buttons */}
+            {/* Google Maps Destination Action Buttons — Direct Navigation to Detail/Booking */}
             <View style={styles.actionRow}>
-              {mode === 'ev' ? (
-                <TouchableOpacity
-                  onPress={handleStartCharging}
-                  style={styles.primaryActionBtn}
+              <TouchableOpacity
+                onPress={() => handleNavigateToDetail(selectedLocation, true)}
+                style={styles.primaryActionBtn}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={
+                    selectedLocation.category === 'ev'
+                      ? ['#2FD987', '#1AAD64']
+                      : ['#3B9EFF', '#1A73E8']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.actionGradient}
                 >
-                  <LinearGradient
-                    colors={['#2FD987', '#1AAD64']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.actionGradient}
-                  >
-                    <Text style={styles.primaryActionText}>⚡ Start Charging</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={handleStartBooking}
-                  style={styles.primaryActionBtn}
-                >
-                  <LinearGradient
-                    colors={['#3B9EFF', '#1A73E8']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.actionGradient}
-                  >
-                    <Text style={styles.primaryActionText}>🅿️ Reserve Spot</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
+                  <Text style={styles.primaryActionText}>
+                    {selectedLocation.category === 'ev' ? '⚡ Start Charging' : '🅿️ Book Spot Now'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => {
-                  if (mode === 'ev') {
-                    navigation.navigate('EVDetail', { station: selectedLocation });
-                  } else {
-                    navigation.navigate('ParkingDetail', { spot: selectedLocation });
-                  }
-                }}
+                onPress={() => handleNavigateToDetail(selectedLocation, false)}
                 style={styles.secondaryActionBtn}
+                activeOpacity={0.8}
               >
-                <Text style={styles.secondaryActionText}>Details</Text>
+                <Text style={styles.secondaryActionText}>View Full Page</Text>
               </TouchableOpacity>
             </View>
           </LinearGradient>
         </View>
       )}
-
-      {/* 5. Startup / Mode Selector Modal */}
-      <ModeSelectModal
-        visible={showModeModal}
-        onSelectMode={handleSelectMode}
-      />
-
-      {/* 6. Live EV Charging Simulation Modal */}
-      <Modal visible={showChargeModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>⚡ Live EV Charging</Text>
-            <Text style={styles.modalSub}>{selectedLocation?.name}</Text>
-
-            <View style={styles.chargeRing}>
-              <Text style={styles.chargePercent}>67%</Text>
-              <Text style={styles.chargeRate}>48.2 kW Rate</Text>
-            </View>
-
-            <View style={styles.chargeStatsRow}>
-              <View style={styles.chargeStatBox}>
-                <Text style={styles.chargeStatVal}>14.8 kWh</Text>
-                <Text style={styles.chargeStatLbl}>Delivered</Text>
-              </View>
-              <View style={styles.chargeStatBox}>
-                <Text style={styles.chargeStatVal}>₹236.80</Text>
-                <Text style={styles.chargeStatLbl}>Live Cost</Text>
-              </View>
-              <View style={styles.chargeStatBox}>
-                <Text style={styles.chargeStatVal}>18m 30s</Text>
-                <Text style={styles.chargeStatLbl}>Elapsed</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => setShowChargeModal(false)}
-              style={styles.stopChargeBtn}
-            >
-              <Text style={styles.stopChargeText}>STOP CHARGING</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 7. Smart Parking Booking Modal */}
-      <Modal visible={showBookingModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            {bookingConfirmed ? (
-              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                <Text style={{ fontSize: 44, marginBottom: 12 }}>✅</Text>
-                <Text style={styles.modalTitle}>Spot Reserved!</Text>
-                <Text style={styles.modalSub}>
-                  Slot #B2-14 at {selectedLocation?.name}
-                </Text>
-                <Text style={{ color: colors.primary, fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16, marginTop: 10 }}>
-                  Valid for {bookingHours} Hours · ₹{bookingHours * (selectedLocation?.pricePerHour || 40)}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setShowBookingModal(false)}
-                  style={[styles.primaryActionBtn, { marginTop: 24, width: '100%' }]}
-                >
-                  <LinearGradient
-                    colors={['#2FD987', '#1AAD64']}
-                    style={styles.actionGradient}
-                  >
-                    <Text style={styles.primaryActionText}>Done</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.modalTitle}>🅿️ Reserve Parking Spot</Text>
-                <Text style={styles.modalSub}>{selectedLocation?.name}</Text>
-
-                <Text style={styles.durationTitle}>Select Duration</Text>
-                <View style={styles.hourChipRow}>
-                  {[1, 2, 4, 8].map((h) => (
-                    <TouchableOpacity
-                      key={h}
-                      onPress={() => setBookingHours(h)}
-                      style={[styles.hourChip, bookingHours === h && styles.hourChipActive]}
-                    >
-                      <Text style={[styles.hourChipText, bookingHours === h && styles.hourChipTextActive]}>
-                        {h} {h === 1 ? 'Hour' : 'Hours'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLbl}>Total (₹{selectedLocation?.pricePerHour || 40} × {bookingHours}h):</Text>
-                  <Text style={styles.priceValue}>₹{bookingHours * (selectedLocation?.pricePerHour || 40)}</Text>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => setBookingConfirmed(true)}
-                  style={[styles.primaryActionBtn, { marginTop: 16 }]}
-                >
-                  <LinearGradient
-                    colors={['#3B9EFF', '#1A73E8']}
-                    style={styles.actionGradient}
-                  >
-                    <Text style={styles.primaryActionText}>
-                      Pay ₹{bookingHours * (selectedLocation?.pricePerHour || 40)} & Confirm
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -500,75 +430,118 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  modePillContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(20, 25, 24, 0.92)',
-    borderRadius: 30,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  modeTab: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderRadius: 24,
-  },
-  modeTabActiveEV: {
-    backgroundColor: colors.primaryGlow,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  modeTabActiveParking: {
-    backgroundColor: 'rgba(59, 158, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.secondary,
-  },
-  modeTabText: {
-    fontFamily: 'SpaceGrotesk_600SemiBold',
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  modeTabTextActiveEV: {
-    color: colors.primary,
-  },
-  modeTabTextActiveParking: {
-    color: colors.secondary,
-  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(26, 32, 30, 0.95)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(20, 25, 24, 0.96)',
+    borderRadius: 16,
     paddingHorizontal: 14,
-    height: 48,
+    height: 50,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.5,
-    shadowRadius: 12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 10,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
     color: colors.textPrimary,
+  },
+  clearSearchBtn: {
+    padding: 6,
+  },
+  clearSearchText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  searchResultsDropdown: {
+    backgroundColor: 'rgba(20, 25, 24, 0.98)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 15,
+  },
+  dropdownHeaderLabel: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 10,
+    color: colors.textMuted,
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  resultIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  iconCircleEV: {
+    backgroundColor: 'rgba(47, 217, 135, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(47, 217, 135, 0.3)',
+  },
+  iconCircleParking: {
+    backgroundColor: 'rgba(59, 158, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 158, 255, 0.3)',
+  },
+  resultItemName: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  resultItemAddress: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  resultBadgeText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 13,
+  },
+  resultDistText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   areaScroll: {
     paddingVertical: 8,
     gap: 8,
   },
   areaChip: {
-    backgroundColor: 'rgba(20, 25, 24, 0.9)',
+    backgroundColor: 'rgba(20, 25, 24, 0.92)',
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 13,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -582,14 +555,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterChip: {
-    backgroundColor: 'rgba(20, 25, 24, 0.9)',
+    backgroundColor: 'rgba(20, 25, 24, 0.92)',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  filterChipActiveEV: {
+  filterChipActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
@@ -604,12 +577,12 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: colors.bg,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
   },
   floatingControls: {
     position: 'absolute',
     right: 16,
-    bottom: 230,
+    bottom: 250,
     zIndex: 90,
   },
   floatingBtn: {
@@ -628,13 +601,13 @@ const styles = StyleSheet.create({
   },
   bottomSheet: {
     position: 'absolute',
-    bottom: 75,
-    left: 12,
-    right: 12,
+    bottom: 85,
+    left: 14,
+    right: 14,
     zIndex: 100,
   },
   bottomSheetGradient: {
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
@@ -649,16 +622,31 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
+  categoryBadgeContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgeEV: {
+    backgroundColor: 'rgba(47, 217, 135, 0.15)',
+  },
+  badgeParking: {
+    backgroundColor: 'rgba(59, 158, 255, 0.15)',
+  },
   sheetBadge: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 10,
-    color: colors.primary,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   sheetRating: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
+    fontSize: 12,
     color: colors.warning,
+  },
+  reviewCount: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: colors.textMuted,
   },
   sheetTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',
@@ -672,20 +660,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   metricsRow: {
     flexDirection: 'row',
     backgroundColor: colors.bgElevated,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 8,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
   },
   metricItem: {
     flex: 1,
@@ -714,7 +706,7 @@ const styles = StyleSheet.create({
   },
   primaryActionBtn: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   actionGradient: {
@@ -728,8 +720,8 @@ const styles = StyleSheet.create({
     color: '#0D1110',
   },
   secondaryActionBtn: {
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
@@ -739,151 +731,6 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontFamily: 'SpaceGrotesk_600SemiBold',
     fontSize: 13,
-    color: colors.textPrimary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.bgElevated,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 20,
-    color: colors.textPrimary,
-  },
-  modalSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  chargeRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: colors.primary,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 10,
-    backgroundColor: colors.primaryGlow,
-  },
-  chargePercent: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 28,
-    color: colors.textPrimary,
-  },
-  chargeRate: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: colors.primary,
-  },
-  chargeStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginVertical: 20,
-  },
-  chargeStatBox: {
-    flex: 1,
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chargeStatVal: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 16,
-    color: colors.primary,
-  },
-  chargeStatLbl: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  stopChargeBtn: {
-    backgroundColor: 'rgba(255, 90, 90, 0.15)',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.error,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  stopChargeText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 14,
-    color: colors.error,
-  },
-  durationTitle: {
-    fontFamily: 'SpaceGrotesk_600SemiBold',
-    fontSize: 14,
-    color: colors.textPrimary,
-    marginBottom: 10,
-  },
-  hourChipRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
-  },
-  hourChip: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  hourChipActive: {
-    borderColor: colors.secondary,
-    backgroundColor: 'rgba(59, 158, 255, 0.15)',
-  },
-  hourChipText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  hourChipTextActive: {
-    color: colors.secondary,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  priceLbl: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  priceValue: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 16,
     color: colors.textPrimary,
   },
 });

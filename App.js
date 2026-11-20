@@ -134,8 +134,6 @@ export default function App() {
           initialRouteName="Map"
         >
           <Tab.Screen name="Map" component={MapStack} />
-          <Tab.Screen name="EV" component={EVStack} />
-          <Tab.Screen name="Parking" component={ParkingStack} />
           <Tab.Screen name="Profile" component={ProfileStack} />
         </Tab.Navigator>
       </NavigationContainer>

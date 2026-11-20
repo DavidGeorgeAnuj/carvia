@@ -230,11 +230,12 @@ export default function InteractiveMap({
       markers = [];
 
       locations.forEach(function(loc) {
+        var isParking = loc.category === 'parking' || loc.pricePerHour !== undefined;
         var statusClass = loc.status === 'full' ? 'full' : loc.status === 'partial' || loc.status === 'busy' ? 'busy' : '';
-        var modeClass = mode === 'parking' ? 'parking' : '';
-        var label = mode === 'parking'
-          ? '₹' + loc.pricePerHour + '/h'
-          : (loc.maxPower ? loc.maxPower + ' kW' : '⚡ EV');
+        var modeClass = isParking ? 'parking' : '';
+        var label = isParking
+          ? '🅿️ ₹' + loc.pricePerHour + '/h'
+          : (loc.maxPower ? '⚡ ' + loc.maxPower + ' kW' : '⚡ EV');
 
         var badgeHtml = '<div class="custom-badge ' + modeClass + ' ' + statusClass + '" id="badge-' + loc.id + '">' +
           '<span class="badge-dot"></span>' +
@@ -263,8 +264,11 @@ export default function InteractiveMap({
       if (!event.data) return;
       if (event.data.type === 'PAN_TO' && map) {
         map.panTo({ lat: event.data.lat, lng: event.data.lng });
-        map.setZoom(event.data.zoom || 14);
+        map.setZoom(event.data.zoom || 15);
         if (event.data.id) highlightBadge(event.data.id);
+      } else if (event.data.type === 'UPDATE_LOCATIONS' && map) {
+        locations = event.data.locations || [];
+        renderMarkers();
       }
     });
 
@@ -297,6 +301,18 @@ export default function InteractiveMap({
       return () => window.removeEventListener('message', handleMessage);
     }
   }, [locations, onSelectLocation]);
+
+  useEffect(() => {
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(
+        {
+          type: 'UPDATE_LOCATIONS',
+          locations,
+        },
+        '*'
+      );
+    }
+  }, [locations]);
 
   useEffect(() => {
     if (selectedLocation && iframeRef.current?.contentWindow) {

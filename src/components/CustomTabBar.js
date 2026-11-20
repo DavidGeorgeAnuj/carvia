@@ -7,9 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
 const TABS = [
-  { key: 'Map', label: 'Live Map', icon: '🗺️', activeIcon: '🗺️', root: 'MapMain' },
-  { key: 'EV', label: 'EV Stations', icon: '⚡', activeIcon: '⚡', root: 'EVMain' },
-  { key: 'Parking', label: 'Parking', icon: '🅿️', activeIcon: '🅿️', root: 'ParkingMain' },
+  { key: 'Map', label: 'Map', icon: '🗺️', activeIcon: '🗺️', root: 'MapMain' },
   { key: 'Profile', label: 'Profile', icon: '👤', activeIcon: '👤', root: 'ProfileMain' },
 ];
 
@@ -89,12 +87,15 @@ const tabStyles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
     paddingBottom: 12,
     paddingTop: 10,
-    marginHorizontal: 16,
-    borderRadius: 24,
+    marginHorizontal: 32,
+    maxWidth: 360,
+    alignSelf: 'center',
+    width: '82%',
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: -4 },
     elevation: 20,
